@@ -88,24 +88,3 @@ slurm/           array job, evaluation, smoke test, nnU-Net, SCSegamba
 Outputs: `$RUNS_ROOT/benchmark/<model>/seed_<n>/` (`best.pt`, `last.pt`, `history.csv`,
 `config.yaml`, `FINISHED`, `eval/`), `$RUNS_ROOT/figures/`, `$RUNS_ROOT/tables/`.
 
-## Adding an ablation later
-
-Write a config that overrides the section under study and gives the run its own
-`protocol` name (its output folder), for example a loss ablation on the chosen model:
-
-```yaml
-# configs/ablation/unet_r34_hairline_loss.yaml
-_base_: ../base.yaml
-protocol: ablation_loss
-model: unet_r34
-loss: {name: hairline, cldice_weight: 0.5}
-```
-
-## Things to know about the data
-
-- The split is by tile, not by source image: most val/test tiles have a neighbouring
-  tile of the same orthomosaic in training. Absolute scores are optimistic; the ranking
-  is what the benchmark is for. `scripts/inspect_dataset.py` reports the details.
-- The dataset mixes sizes (256 to 4032 px). Pooled metrics weight every pixel equally,
-  so a few very large photos can dominate. `data.exclude_regex` in the config drops
-  tiles by name, and `tables/val_iou_by_source.*` shows IoU per source group.
