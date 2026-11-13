@@ -1,0 +1,59 @@
+# Benchmark protocol, identical for every model. A per-model file only names the model
+# (and, if it does not fit the GPU, a smaller batch with gradient accumulation).
+# Ablations later: add a config that overrides the section under study; no code changes.
+
+protocol: benchmark          # output goes to $RUNS_ROOT/<protocol>/<model>/seed_<n>
+model: null                  # registry name, set by the per-model config
+
+data:
+  crop_size: 256             # training crop (tiles smaller than this are padded)
+  exclude_regex: []          # e.g. ["^sut_"] drops tiles whose name matches (case-insensitive)
+  eval_max_side: 1024        # larger images are predicted with a sliding window
+  eval_window: 512
+  eval_stride: 448
+  max_train_samples: 0       # 0 = all
+  max_eval_samples: 0
+
+aug:                         # one fixed setting for all models
+  flip: true
+  rotate90: true
+  affine_p: 0.3
+  affine_scale: [0.9, 1.1]
+  affine_rotate: [-15, 15]
+  brightness_contrast_p: 0.5
+  brightness_limit: 0.15
+  contrast_limit: 0.15
+  hsv_p: 0.3
+  blur_noise_p: 0.15
+
+train:
+  epochs: 80
+  batch_size: 16             # per optimizer step: batch_size * accum_steps is the effective batch
+  accum_steps: 1
+  eval_batch_size: 16
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  warmup_epochs: 2           # linear warm-up, then cosine to lr * min_lr_ratio
+  min_lr_ratio: 0.01
+  grad_clip: 1.0
+  patience: 15               # early stopping on val IoU
+  amp: true
+  pretrained: true
+  deterministic: true
+
+loss:
+  name: bce_dice             # bce_dice | hairline
+  bce_weight: 1.0
+  dice_weight: 1.0
+  aux_weight: 0.0            # weight of auxiliary (deep-supervision) outputs; 0 in the benchmark
+
+recipe:                      # tricks of the original recipes; all off in the benchmark
+  ema_decay: 0.0             # > 0 enables an EMA of the weights, used for validation and best.pt
+  encoder_lr_factor: 1.0
+  deep_supervision: false
+  tta: false                 # horizontal/vertical flip test-time augmentation
+  cldice_warmup_epochs: 0
+
+eval:
+  tolerances: [0, 1, 2, 3, 5]
+  threshold: 0.5             # used during training-time validation only
