@@ -1,0 +1,3 @@
+# DeepCrack | family: crack-specific | tier1
+# Everything not set here comes from base.yaml (the shared benchmark protocol).
+model: deepcrack

@@ -1,0 +1,3 @@
+# SegFormer-B2 | family: Transformer | tier1
+# Everything not set here comes from base.yaml (the shared benchmark protocol).
+model: segformer_b2

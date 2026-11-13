@@ -1,0 +1,3 @@
+# UNet++ R34 | family: CNN | core
+# Everything not set here comes from base.yaml (the shared benchmark protocol).
+model: unetpp_r34

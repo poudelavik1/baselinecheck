@@ -1,0 +1,3 @@
+# U-Net EffNet-B4 | family: CNN | core
+# Everything not set here comes from base.yaml (the shared benchmark protocol).
+model: unet_effb4

@@ -1,0 +1,3 @@
+# U-Net ConvNeXt-T | family: CNN | tier1
+# Everything not set here comes from base.yaml (the shared benchmark protocol).
+model: unet_convnext_t
