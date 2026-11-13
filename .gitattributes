@@ -1,0 +1,8 @@
+# Shell and Slurm scripts must keep LF endings: they are written on Windows and run on Linux.
+* text=auto
+*.sh text eol=lf
+*.sbatch text eol=lf
+*.slurm text eol=lf
+*.py text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf

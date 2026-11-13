@@ -1,0 +1,29 @@
+# Code only: never commit data, weights or results.
+data/
+runs/
+checkpoints/
+logs/
+wandb/
+nnUNet_raw/
+nnUNet_preprocessed/
+nnUNet_results/
+weights_cache/
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+
+# Script outputs pasted back from the server
+inspect_dataset*.txt
+inspect_dataset*.csv
+check_env*.txt
+
+# Python / editors
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.claude/
