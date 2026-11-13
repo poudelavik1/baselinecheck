@@ -1,0 +1,29 @@
+# ORIGINAL RECIPE of HairlineSwinUNet (train_swin_unet_hairline), reported in a SEPARATE table.
+# Kept from the original: HairlineCrackLoss (BCE + Tversky + clDice with warm-up), deep
+# supervision, EMA, encoder LR x0.2, flip TTA, batch 4 x 3 accumulation, lr 4e-4.
+# NOT kept: the original script's own augmentation pipeline (copy-paste, synthetic cracks,
+# focus crops) and its model selection on tolerant F1; this run uses the benchmark
+# augmentation and selects on val IoU. The untouched original numbers are shown through
+# the "previous run" loader (make_report.py --previous).
+_base_: ../base.yaml
+protocol: original
+model: swin_unet
+train:
+  batch_size: 4
+  accum_steps: 3
+  lr: 4.0e-4
+loss:
+  name: hairline
+  bce_weight: 1.0
+  tversky_weight: 1.0
+  cldice_weight: 0.5
+  false_positive_weight: 0.4
+  false_negative_weight: 0.6
+  skeleton_iterations: 10
+  auxiliary_weights: [0.4, 0.2]
+recipe:
+  ema_decay: 0.999
+  encoder_lr_factor: 0.2
+  deep_supervision: true
+  tta: true
+  cldice_warmup_epochs: 5
