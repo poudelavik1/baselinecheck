@@ -32,6 +32,12 @@ def run(command: list[str]) -> tuple[bool, str]:
     return process.returncode == 0, (process.stdout + process.stderr)
 
 
+def drop_resume_checkpoints(runs: Path) -> None:
+    """last.pt (weights + optimizer) is the large file and is not needed after a smoke run."""
+    for path in runs.glob("*/*/seed_*/last.pt"):
+        path.unlink(missing_ok=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data-root", default=None, help="Default: a synthetic dataset is generated")
@@ -69,6 +75,7 @@ def main() -> int:
             if not args.pretrained:
                 command.append("--no-pretrained")
             ok, log = run(command)
+            drop_resume_checkpoints(runs)
             if not ok and "is not installed" in log:
                 print(f"[skip] {spec.name}: third-party code not installed (see SERVER_GUIDE.md, Tier 2)", flush=True)
                 break

@@ -30,3 +30,5 @@ __pycache__/
 third_party/
 joblist*.txt
 slurm/env.sh
+*.log
+estimate*.txt
