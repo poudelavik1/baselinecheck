@@ -4,7 +4,7 @@
 
 export ENV_NAME="<ENV_NAME>"                          # conda env of the benchmark
 export ENV_DIR="$HOME/.conda/envs/$ENV_NAME"          # check with: conda env list
-export DATA_ROOT="$HOME/swinunet/split_80_10_10"      # dataset (never copied into the repo)
+export DATA_ROOT="$HOME/dataset_20261113/split_80_10_10"      # dataset (never copied into the repo)
 export RUNS_ROOT="$HOME/crack_benchmark_runs"         # checkpoints, CSVs, figures, tables
 export WEIGHTS_CACHE="$HOME/weights_cache"            # filled by scripts/download_weights.py
 

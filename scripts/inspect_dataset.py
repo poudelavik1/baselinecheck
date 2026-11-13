@@ -2,8 +2,8 @@
 """Describe a crack-segmentation tile dataset. CPU only, safe on a login node.
 
 Usage:
-    python scripts/inspect_dataset.py --data-root ~/swinunet/split_80_10_10 | tee inspect_dataset.txt
-    DATA_ROOT=~/swinunet/split_80_10_10 python scripts/inspect_dataset.py
+    python scripts/inspect_dataset.py --data-root ~/dataset_20261113/split_80_10_10 | tee inspect_dataset.txt
+    DATA_ROOT=~/dataset_20261113/split_80_10_10 python scripts/inspect_dataset.py
 
 Prints: folder layout, image/mask pairing and formats, tile sizes, mask value range,
 sample counts and crack-pixel percentage per split, the source image every tile comes

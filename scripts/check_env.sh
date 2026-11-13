@@ -130,7 +130,7 @@ echo "DATA_ROOT : ${DATA_ROOT:-unset}"
 echo "RUNS_ROOT : ${RUNS_ROOT:-unset}"
 echo "TORCH_HOME: ${TORCH_HOME:-unset (default ~/.cache/torch)}"
 echo "HF_HOME   : ${HF_HOME:-unset (default ~/.cache/huggingface)}"
-for d in "${DATA_ROOT:-$HOME/swinunet/split_80_10_10}" "$HOME/.cache/torch" "$HOME/.cache/huggingface"; do
+for d in "${DATA_ROOT:-$HOME/dataset_20261113/split_80_10_10}" "$HOME/.cache/torch" "$HOME/.cache/huggingface"; do
     [ -e "$d" ] && echo "$(du -sh "$d" 2>/dev/null | cut -f1)  $d"
 done
 

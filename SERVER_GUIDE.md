@@ -1,8 +1,9 @@
 # Server guide (ASL Slurm cluster)
 
-Login host `ait-slurm`, user `se-st126157`. Every command below runs **on the server, in
-the repo folder**, unless it says "laptop". The dataset stays at
-`~/swinunet/split_80_10_10` and is never copied into the repo.
+Login: `ssh asl.ait.ac.th` (host `ait-slurm`, port 44065, user `se-st126157`). Every command below runs **on the server, in
+the repo folder** (`cd ~/baselinecheck`), unless it says "laptop". In a new login shell, load conda first:
+`source /opt/miniconda3/etc/profile.d/conda.sh && conda activate swinunet`. The dataset stays at
+`~/dataset_20261113/split_80_10_10` and is never copied into the repo.
 
 ## 1. Get the code
 
@@ -38,7 +39,7 @@ Check it (paste both outputs back when asked):
 bash scripts/check_env.sh 2>&1 | tee check_env_login.txt
 srun -p ASL-gpu --gres=gpu:1 --cpus-per-task=4 --mem=16G --time=00:10:00 \
      env ENV_DIR=$HOME/.conda/envs/<ENV_NAME> bash scripts/check_env.sh 2>&1 | tee check_env_gpu.txt
-python scripts/inspect_dataset.py --data-root ~/swinunet/split_80_10_10 | tee inspect_dataset.txt
+python scripts/inspect_dataset.py --data-root ~/dataset_20261113/split_80_10_10 | tee inspect_dataset.txt
 ```
 
 The jobs do not `conda activate` (conda is not on the compute nodes): they put
@@ -180,14 +181,14 @@ With `rsync` (Git Bash or WSL):
 rsync -avm --exclude='nnunet/' --exclude='_smoke/' --exclude='joblists/' \
   --include='*/' --include='*.csv' --include='*.json' --include='*.yaml' --include='*.txt' \
   --include='*.tex' --include='*.png' --include='*.pdf' --include='FINISHED' --exclude='*' \
-  se-st126157@ait-slurm:crack_benchmark_runs/ ./runs/
+  asl.ait.ac.th:crack_benchmark_runs/ ./runs/
 ```
 
 Without rsync (PowerShell; packs the small files on the server, then copies one archive):
 
 ```powershell
-ssh se-st126157@ait-slurm "cd ~/crack_benchmark_runs && find . \( -name '*.csv' -o -name '*.json' -o -name '*.yaml' -o -name '*.txt' -o -name '*.tex' -o -name '*.png' -o -name '*.pdf' -o -name FINISHED \) -not -path './nnunet/*' -not -path './_smoke/*' | tar czf ~/results.tgz -T -"
-scp se-st126157@ait-slurm:results.tgz .
+ssh asl.ait.ac.th "cd ~/crack_benchmark_runs && find . \( -name '*.csv' -o -name '*.json' -o -name '*.yaml' -o -name '*.txt' -o -name '*.tex' -o -name '*.png' -o -name '*.pdf' -o -name FINISHED \) -not -path './nnunet/*' -not -path './_smoke/*' | tar czf ~/results.tgz -T -"
+scp asl.ait.ac.th:results.tgz .
 New-Item -ItemType Directory -Force runs | Out-Null
 tar -xzf results.tgz -C runs
 ```
