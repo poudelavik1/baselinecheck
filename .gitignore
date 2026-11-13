@@ -27,3 +27,6 @@ __pycache__/
 .vscode/
 .idea/
 .claude/
+third_party/
+joblist*.txt
+slurm/env.sh

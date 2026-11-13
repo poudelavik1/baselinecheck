@@ -1,0 +1,13 @@
+# conda env create -f environment.yml -n <ENV_NAME>      (new environment)
+# conda env update -f environment.yml -n <ENV_NAME>      (update an existing one)
+# PyTorch comes from pip so that its CUDA build can match the cluster driver: if the
+# default wheel does not see the GPU, reinstall with the right index, e.g.
+#   pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu121
+name: crackbench
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - -r requirements.txt

@@ -1,0 +1,17 @@
+# Benchmark environment (main env). Install PyTorch first, matching the cluster's CUDA:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+torch>=2.1
+torchvision>=0.16
+segmentation-models-pytorch>=0.5.0   # Segformer + tu-convnext encoders in smp.Unet need 0.5
+timm>=1.0
+albumentations>=1.4,<2.1
+opencv-python-headless>=4.8
+numpy>=1.24
+scipy>=1.10
+scikit-image>=0.21
+pandas>=2.0
+matplotlib>=3.7
+pyyaml>=6.0
+pillow>=10.0
+jinja2>=3.1                          # pandas DataFrame.to_latex
+thop>=0.1.1                          # FLOPs (fvcore is used instead when installed)

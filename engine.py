@@ -62,6 +62,18 @@ class ModelEMA:
                 value.copy_(source[key])
 
 
+# torch 1.13 (the SCSegamba environment) has neither torch.OutOfMemoryError nor torch.amp.GradScaler.
+OutOfMemoryError = getattr(torch, "OutOfMemoryError", None) or getattr(torch.cuda, "OutOfMemoryError", RuntimeError)
+
+
+def grad_scaler(device: torch.device, amp: bool):
+    enabled = amp and device.type == "cuda"
+    try:
+        return torch.amp.GradScaler(device.type, enabled=enabled)
+    except (AttributeError, TypeError):
+        return torch.cuda.amp.GradScaler(enabled=enabled)
+
+
 def autocast(device: torch.device, enabled: bool):
     return torch.autocast(device_type=device.type, enabled=enabled and device.type == "cuda")
 

@@ -69,6 +69,9 @@ def main() -> int:
             if not args.pretrained:
                 command.append("--no-pretrained")
             ok, log = run(command)
+            if not ok and "is not installed" in log:
+                print(f"[skip] {spec.name}: third-party code not installed (see SERVER_GUIDE.md, Tier 2)", flush=True)
+                break
             status[f"{spec.name}/seed_{seed}"] = "ok" if ok else "TRAIN FAILED"
             print(f"[{'ok' if ok else 'FAIL'}] train {spec.name} seed {seed} ({time.time() - started:.0f}s)", flush=True)
             if not ok:

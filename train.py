@@ -199,7 +199,7 @@ def main() -> int:
     loss_fn = build_loss(config).to(device)
     optimizer = make_optimizer(model, config)
     scheduler = make_scheduler(optimizer, config)
-    scaler = torch.amp.GradScaler(device.type, enabled=bool(config["train"]["amp"]) and device.type == "cuda")
+    scaler = engine.grad_scaler(device, bool(config["train"]["amp"]))
     ema_decay = float(config["recipe"].get("ema_decay", 0) or 0)
     ema = engine.ModelEMA(model, ema_decay) if ema_decay > 0 else None
 
@@ -239,7 +239,7 @@ def main() -> int:
             torch.cuda.reset_peak_memory_stats()
         try:
             train_stats = train_one_epoch(model, loader, loss_fn, optimizer, scaler, device, config, epoch, ema, accum_steps)
-        except torch.OutOfMemoryError:
+        except engine.OutOfMemoryError:
             if batch_size <= 1:
                 raise
             # Same effective batch with less memory: halve the batch, double the accumulation.
