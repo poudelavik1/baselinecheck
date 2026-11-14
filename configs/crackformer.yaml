@@ -1,3 +1,9 @@
 # CrackFormer-II | family: crack-specific | tier2
 # Everything not set here comes from base.yaml (the shared benchmark protocol).
 model: crackformer
+
+# fp16 mixed precision gives a non-finite loss at the first step on the GPU (ASL smoke test,
+# job of 2026-11-14), so CrackFormer-II trains in float32, as in its official code. It is a
+# 5 M-parameter network, so the cost is small. Inference timing is also float32 for it.
+train:
+  amp: false
