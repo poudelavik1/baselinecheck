@@ -35,3 +35,25 @@ echo "data   : $DATA_ROOT"
 echo "runs   : $RUNS_ROOT"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo "no GPU visible"
 [ -d "$DATA_ROOT" ] || { echo "DATA_ROOT not found: $DATA_ROOT" >&2; exit 1; }
+
+# Stop now, with one clear message, if the main env lacks a package (instead of every task failing).
+if [ "$ACTIVE_ENV_DIR" = "$ENV_DIR" ]; then
+    python - <<'PY' || exit 1
+import importlib, sys
+need = {"torch": "torch", "torchvision": "torchvision", "segmentation_models_pytorch": "segmentation-models-pytorch",
+        "timm": "timm", "albumentations": "albumentations<2.1", "cv2": "opencv-python-headless", "numpy": "numpy",
+        "scipy": "scipy", "skimage": "scikit-image", "pandas": "pandas", "matplotlib": "matplotlib",
+        "yaml": "pyyaml", "PIL": "pillow"}
+missing = []
+for module, package in need.items():
+    try:
+        importlib.import_module(module)
+    except Exception:
+        missing.append(package)
+if missing:
+    print(f"Missing packages in {sys.prefix}: {', '.join(missing)}", file=sys.stderr)
+    print(f'Install on the login node:  {sys.executable} -m pip install "' + '" "'.join(missing) + '"', file=sys.stderr)
+    sys.exit(1)
+print("packages: ok")
+PY
+fi
