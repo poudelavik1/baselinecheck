@@ -18,6 +18,7 @@ import matplotlib.ticker  # noqa: F401
 import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.markers import MarkerStyle
+from matplotlib.patches import Patch
 from matplotlib.transforms import Bbox
 import pandas as pd
 
@@ -55,6 +56,21 @@ def style(model: str) -> dict[str, Any]:
 
 def label(model: str) -> str:
     return res.info(model)["label"]
+
+
+def model_legend(axis: plt.Axes, models: list[str], labels: list[str], marker: bool = True) -> None:
+    """One entry per model, outside the plot on the right, in the order given (best first).
+
+    Each entry draws the model's colour and line style, plus its family marker when the plot shows markers.
+    """
+    handles = []
+    for model in models:
+        look = style(model)
+        handles.append(Line2D([], [], color=look["color"], linestyle=look["linestyle"], linewidth=1.5,
+                              marker=look["marker"] if marker else None, markersize=6, markeredgecolor="black",
+                              markeredgewidth=0.6))
+    axis.legend(handles, labels, loc="upper left", bbox_to_anchor=(1.02, 1.0), frameon=False, borderaxespad=0,
+                handlelength=2.8)
 
 
 def save(figure: plt.Figure, out: Path, name: str) -> Path:
@@ -129,11 +145,10 @@ def fig2_training(results: res.Results, out: Path) -> list[Path]:
                 band = res.history_band(results, model, f"{part}_{quantity}")
                 if band is None:
                     continue
-                axis.plot(band.index, band["mean"], linestyle=line, color=color(model), linewidth=1.4, label=part)
+                axis.plot(band.index, band["mean"], linestyle=line, color=color(model), linewidth=1.4)
                 axis.fill_between(band.index, band["mean"] - band["std"], band["mean"] + band["std"],
                                   color=color(model), alpha=alpha, linewidth=0)
             axis.set_title(label(model), fontsize=9)
-            axis.legend(frameon=False, fontsize=7)
         for axis in axes.ravel()[len(models):]:
             axis.set_visible(False)
         for axis in axes[-1]:
@@ -141,6 +156,12 @@ def fig2_training(results: res.Results, out: Path) -> list[Path]:
         for axis in axes[:, 0]:
             axis.set_ylabel(name)
         figure.tight_layout()
+        key = [Line2D([], [], color="0.25", linestyle="--", linewidth=1.4),
+               Line2D([], [], color="0.25", linestyle="-", linewidth=1.4),
+               Patch(facecolor="0.25", alpha=0.25, linewidth=0)]
+        figure.legend(key, ["train (mean over seeds)", "val (mean over seeds)", "±1 std over seeds"],
+                      loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=3, frameon=False, fontsize=9,
+                      handlelength=2.8)
         paths.append(save(figure, out, f"fig2_training_{quantity}"))
     return paths
 
@@ -149,19 +170,19 @@ def fig3_pr(results: res.Results, summary: pd.DataFrame, out: Path, split: str =
     """Fig. 3: precision-recall curves of all models, AP in the legend."""
     figure, axis = plt.subplots(figsize=(6.4, 5.6))
     ap = summary.set_index("model")["ap"]
-    drawn = 0
+    drawn = []
     for model in sorted(results.models, key=lambda m: -ap.get(m, 0)):
         curve = res.mean_curve(results, model, split)
         if curve is None:
             continue
         axis.plot(curve["recall"], curve["precision"], color=color(model), linestyle=style(model)["linestyle"],
-                  linewidth=1.5, label=f"{label(model)} (AP {ap.get(model, float('nan')):.3f})")
-        drawn += 1
+                  linewidth=1.5)
+        drawn.append(model)
     if not drawn:
         plt.close(figure)
         return None
     axis.set(xlabel="Recall", ylabel="Precision", xlim=(0, 1), ylim=(0, 1.01))
-    axis.legend(frameon=False, loc="lower left", ncol=1 if drawn <= 10 else 2)
+    model_legend(axis, drawn, [f"{label(m)} (AP {ap.get(m, float('nan')):.3f})" for m in drawn], marker=False)
     return save(figure, out, f"fig3_{split}_precision_recall")
 
 
@@ -169,24 +190,26 @@ def fig4_f1_threshold(results: res.Results, summary: pd.DataFrame, out: Path, sp
     """Fig. 4: F1 against threshold per model; the marker is the threshold chosen on validation."""
     figure, axis = plt.subplots(figsize=(6.8, 5.0))
     thresholds = summary.set_index("model")["threshold"]
-    drawn = 0
+    drawn: dict[str, float] = {}   # model -> F1 at its chosen threshold
     for model in by_family(results.models):
         curve = res.mean_curve(results, model, split)
         if curve is None:
             continue
         look = style(model)
-        axis.plot(curve["threshold"], curve["f1"], color=look["color"], linestyle=look["linestyle"], linewidth=1.4,
-                  label=label(model))
+        axis.plot(curve["threshold"], curve["f1"], color=look["color"], linestyle=look["linestyle"], linewidth=1.4)
         chosen = float(thresholds.get(model, np.nan))
+        drawn[model] = -1.0
         if np.isfinite(chosen):
-            axis.plot(chosen, np.interp(chosen, curve["threshold"], curve["f1"]), marker=look["marker"],
-                      color=look["color"], markeredgecolor="black", markersize=8, linestyle="none")
-        drawn += 1
+            drawn[model] = float(np.interp(chosen, curve["threshold"], curve["f1"]))
+            axis.plot(chosen, drawn[model], marker=look["marker"], color=look["color"], markeredgecolor="black",
+                      markersize=8, linestyle="none")
     if not drawn:
         plt.close(figure)
         return None
     axis.set(xlabel="Probability threshold", ylabel=f"{split} F1", xlim=(0, 1))
-    axis.legend(frameon=False, bbox_to_anchor=(1.01, 1.0), loc="upper left")
+    axis.set_title("Markers: threshold chosen on validation", fontsize=8, loc="left")
+    order = sorted(drawn, key=lambda m: -drawn[m])
+    model_legend(axis, order, [label(m) for m in order])
     return save(figure, out, f"fig4_{split}_f1_vs_threshold")
 
 
@@ -356,14 +379,16 @@ def fig7_tolerance(summary: pd.DataFrame, out: Path, split: str = "val") -> Path
     if not tolerances:
         return None
     figure, axis = plt.subplots(figsize=(6.6, 4.8))
+    table = summary.set_index("model")
     for model in by_family(list(summary["model"])):
-        row = summary.set_index("model").loc[model]
+        row = table.loc[model]
         look = style(model)
         axis.errorbar(tolerances, [row[f"tol_f1_{t}"] for t in tolerances], yerr=[row[f"tol_f1_{t}_std"] for t in tolerances],
                       color=look["color"], marker=look["marker"], linestyle=look["linestyle"], linewidth=1.4,
-                      markersize=5, capsize=2, label=label(model))
+                      markersize=5.5, markeredgecolor="black", markeredgewidth=0.5, capsize=2)
     axis.set(xlabel="Tolerance (px)", ylabel=f"{split} F1", xticks=tolerances)
-    axis.legend(frameon=False, bbox_to_anchor=(1.01, 1.0), loc="upper left")
+    order = list(table[f"tol_f1_{tolerances[-1]}"].sort_values(ascending=False).index)   # line ends, top to bottom
+    model_legend(axis, order, [label(m) for m in order])
     return save(figure, out, f"fig7_{split}_f1_vs_tolerance")
 
 
