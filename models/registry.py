@@ -13,6 +13,14 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 FAMILIES = ("CNN", "Transformer", "Mamba", "crack-specific", "auto-configured", "my-existing")
+# How a family is named in figures and thesis tables; the keys above stay the internal names.
+FAMILY_LABELS = {"my-existing": "Own models"}
+
+
+def family_label(family: str) -> str:
+    return FAMILY_LABELS.get(family, family)
+
+
 TIERS = ("core", "tier1", "tier2")
 IMAGENET_MEAN, IMAGENET_STD = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 HALF = (0.5, 0.5, 0.5)

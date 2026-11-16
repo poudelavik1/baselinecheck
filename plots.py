@@ -16,10 +16,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker  # noqa: F401
 import numpy as np
+from matplotlib.lines import Line2D
+from matplotlib.markers import MarkerStyle
+from matplotlib.transforms import Bbox
 import pandas as pd
 
 import results as res
-from models.registry import FAMILIES, REGISTRY
+from models.registry import FAMILIES, REGISTRY, family_label
 
 # Colour-blind-safe colours (Paul Tol "muted" and "bright", Okabe-Ito). One per registered model,
 # assigned in registry order so a model keeps its colour when others are added after it.
@@ -95,9 +98,16 @@ def fig1_bars(summary: pd.DataFrame, out: Path, split: str = "val") -> Path:
         axis.set_ylim(low, min(1.0, float(np.nanmax(values + errors)) + 0.08))
         axis.set_ylabel(f"{split} {title}")
         axis.grid(axis="x", visible=False)
-    for family, start, end in spans:
-        axes[0].text((start + end) / 2, 1.02, family, ha="center", va="bottom", fontsize=9, fontweight="bold",
-                     transform=axes[0].get_xaxis_transform())
+    headers = [axes[0].text((start + end) / 2, 1.02, family_label(family), ha="center", va="bottom", fontsize=9,
+                            fontweight="bold", transform=axes[0].get_xaxis_transform()) for family, start, end in spans]
+    figure.canvas.draw()   # a header that would overlap an earlier one (narrow one-bar families) moves up a level
+    renderer = figure.canvas.get_renderer()
+    for i, header in enumerate(headers):
+        for level in (1.02, 1.09, 1.16):
+            header.set_y(level)
+            box = header.get_window_extent(renderer)
+            if not any(box.overlaps(h.get_window_extent(renderer)) for h in headers[:i]):
+                break
     axes[1].set_xticks(positions)
     axes[1].set_xticklabels(ticks, rotation=40, ha="right")
     return save(figure, out, f"fig1_{split}_iou_f1_bars")
@@ -180,34 +190,139 @@ def fig4_f1_threshold(results: res.Results, summary: pd.DataFrame, out: Path, sp
     return save(figure, out, f"fig4_{split}_f1_vs_threshold")
 
 
+BUBBLE_AREA = 10.0   # scatter marker area (pt^2) per million parameters
+
+
+def _marker_radius(marker: str, area: float) -> float:
+    """Radius (points) of the circle around a scatter marker of this area, edge line included."""
+    shape = MarkerStyle(marker)
+    vertices = shape.get_path().transformed(shape.get_transform()).vertices
+    return float(np.hypot(vertices[:, 0], vertices[:, 1]).max() * np.sqrt(area)) + 0.5
+
+
+def _log_ticks(low: float, high: float) -> list[float]:
+    """Round tick values for a log axis between low and high, about 5-9 of them."""
+    decades = range(int(np.floor(np.log10(low))), int(np.ceil(np.log10(high))) + 1)
+    for steps in ((1, 1.5, 2, 3, 4, 5, 6, 8), (1, 2, 3, 5), (1, 2, 5), (1,)):
+        ticks = [s * 10.0 ** d for d in decades for s in steps if low <= s * 10.0 ** d <= high]
+        if len(ticks) <= 9:
+            return ticks
+    return ticks
+
+
+def _size_steps(params: pd.Series) -> list[float]:
+    """Three round parameter counts spanning the models, for the bubble-size legend."""
+    low, high = float(params.min()), float(params.max())
+    step = 10 ** np.floor(np.log10(high)) / 2
+    return sorted({max(step, round(v / step) * step) for v in np.linspace(low, high, 3)})
+
+
+def _hits_circle(box: Bbox, cx: float, cy: float, radius: float) -> bool:
+    nearest_x, nearest_y = np.clip(cx, box.x0, box.x1), np.clip(cy, box.y0, box.y1)
+    return (nearest_x - cx) ** 2 + (nearest_y - cy) ** 2 < radius ** 2
+
+
+def _place_labels(axis: plt.Axes, points: list[tuple[str, float, float, float, float]], fontsize: float = 7.5) -> None:
+    """Label each point beside its marker without covering another label, a marker or an error bar.
+
+    points: (text, x, y, yerr, marker radius in points) in data coordinates. Tries spots around the marker at
+    twelve angles (right first) and growing distances (further out with a leader line), and takes the first free
+    one; if none is free, the one with the fewest collisions. Axis limits must be final before this is called.
+    """
+    figure = axis.figure
+    figure.canvas.draw()
+    renderer = figure.canvas.get_renderer()
+    px = figure.dpi / 72.0
+    frame = axis.get_window_extent(renderer)
+    centres = axis.transData.transform([(x, y) for _, x, y, _, _ in points])
+    circles = [(cx, cy, radius * px) for (cx, cy), (*_, radius) in zip(centres, points)]
+    bars = []
+    for (cx, _), (_, x, y, err, _) in zip(centres, points):
+        (_, low), (_, high) = axis.transData.transform([(x, y - err), (x, y + err)])
+        bars.append(Bbox.from_extents(cx - 2.5 * px, low, cx + 2.5 * px, high))
+    angles = np.radians([0, 30, -30, 60, -60, 180, 150, -150, 120, -120, 90, -90])
+    crowding = [sum(np.hypot(*(c - o)) < 90 * px for o in centres) for c in centres]
+    placed: list[Bbox] = []
+    for i in sorted(range(len(points)), key=lambda i: -crowding[i]):
+        text, x, y, _, radius = points[i]
+        best = None
+        for extra in (0, 10, 20, 30, 40):   # points beyond the marker edge
+            for angle in angles:
+                dx, dy = np.cos(angle), np.sin(angle)
+                ha = "left" if dx > 0.3 else "right" if dx < -0.3 else "center"
+                va = "bottom" if dy > 0.3 else "top" if dy < -0.3 else "center"
+                offset = (dx * (radius + 2 + extra), dy * (radius + 2 + extra))
+                trial = axis.annotate(text, (x, y), xytext=offset, textcoords="offset points", ha=ha, va=va,
+                                      fontsize=fontsize)
+                box = trial.get_window_extent(renderer).padded(1.5 * px)
+                trial.remove()
+                inside = frame.x0 <= box.x0 and box.x1 <= frame.x1 and frame.y0 <= box.y0 and box.y1 <= frame.y1
+                cost = 100 * (not inside) + sum(_hits_circle(box, *c) for c in circles) \
+                    + sum(box.overlaps(b) for b in bars + placed)
+                if best is None or cost < best[0]:
+                    best = (cost, offset, ha, va, extra, box)
+                if cost == 0:
+                    break
+            if best[0] == 0:
+                break
+        _, offset, ha, va, extra, box = best
+        leader = None
+        if extra > 0:
+            anchor = ({"left": 0.0, "right": 1.0}.get(ha, 0.5), {"bottom": 0.0, "top": 1.0}.get(va, 0.5))
+            leader = {"arrowstyle": "-", "color": "0.45", "linewidth": 0.6, "shrinkA": 1, "shrinkB": radius,
+                      "relpos": anchor}
+        axis.annotate(text, (x, y), xytext=offset, textcoords="offset points", ha=ha, va=va, fontsize=fontsize,
+                      arrowprops=leader)
+        placed.append(box)
+
+
 def fig5_efficiency(summary: pd.DataFrame, out: Path, split: str = "val") -> Path | None:
     """Fig. 5: IoU against inference time; bubble area = number of parameters."""
-    table = summary.dropna(subset=["time_ms", "params_m"])
+    table = summary.dropna(subset=["time_ms", "params_m"]).sort_values("params_m", ascending=False)
     if table.empty:
         return None
     figure, axis = plt.subplots(figsize=(7.2, 5.2))
-    for _, row in table.iterrows():
+    points = []
+    for _, row in table.iterrows():   # largest first, so small bubbles stay on top
         look = style(row["model"])
-        axis.scatter(row["time_ms"], row["iou"], s=18 * row["params_m"], color=look["color"], marker=look["marker"],
-                     alpha=0.75, edgecolor="black", linewidth=0.6)
-        axis.errorbar(row["time_ms"], row["iou"], yerr=row["iou_std"], color="black", linewidth=0.7, capsize=2)
-        axis.annotate(label(row["model"]), (row["time_ms"], row["iou"]), xytext=(6, 5), textcoords="offset points",
-                      fontsize=7.5)
-    for size in (5, 25, 50):
-        axis.scatter([], [], s=18 * size, color="lightgray", edgecolor="black", linewidth=0.6, label=f"{size} M params")
-    for family in FAMILIES:
-        if (table["family"] == family).any():
-            axis.scatter([], [], marker=FAMILY_MARKERS[family], color="white", edgecolor="black", s=50, label=family)
+        area = BUBBLE_AREA * row["params_m"]
+        axis.scatter(row["time_ms"], row["iou"], s=area, color=look["color"], marker=look["marker"], alpha=0.8,
+                     edgecolor="black", linewidth=0.6, zorder=2)
+        axis.errorbar(row["time_ms"], row["iou"], yerr=row["iou_std"], color="black", linewidth=0.7, capsize=2,
+                      zorder=3)
+        points.append((label(row["model"]), row["time_ms"], row["iou"], row["iou_std"],
+                       _marker_radius(look["marker"], area)))
+
     device = next((d for d in table["device"] if d), "")
-    axis.set(xlabel="Inference time per 512x512 tile (ms, log scale)", ylabel=f"{split} IoU")
+    axis.set(xlabel="Inference time per 512×512 tile (ms, log scale)", ylabel=f"{split} IoU")
     if device:
         axis.set_title(f"Timed on {device}", fontsize=8, loc="left")
+    low, high = float(table["time_ms"].min()), float(table["time_ms"].max())
     axis.set_xscale("log")
-    axis.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    axis.xaxis.set_minor_formatter(matplotlib.ticker.ScalarFormatter())
-    axis.tick_params(axis="x", which="minor", labelsize=8)
-    axis.legend(frameon=False, loc="upper left", bbox_to_anchor=(1.02, 1.0), labelspacing=1.6, fontsize=7.5,
-                borderpad=1.0)
+    axis.set_xlim(low / 1.18, high * 1.18)
+    axis.xaxis.set_major_locator(matplotlib.ticker.FixedLocator(_log_ticks(*axis.get_xlim())))
+    axis.xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter("%g"))
+    axis.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+    bottom, top = float((table["iou"] - table["iou_std"]).min()), float((table["iou"] + table["iou_std"]).max())
+    axis.set_ylim(bottom - 0.08 * (top - bottom), top + 0.08 * (top - bottom))
+
+    families = [f for f in FAMILIES if (table["family"] == f).any()]
+    shapes = [Line2D([], [], marker=FAMILY_MARKERS[f], linestyle="none", markersize=7, markerfacecolor="white",
+                     markeredgecolor="black", markeredgewidth=0.8) for f in families]
+    family_legend = axis.legend(shapes, [family_label(f) for f in families], title="Family", loc="upper left",
+                                bbox_to_anchor=(1.03, 1.0), frameon=False, fontsize=7.5, title_fontsize=8, alignment="left", borderaxespad=0)
+    axis.add_artist(family_legend)
+    family_legend.set_clip_on(False)   # else bbox_inches="tight" treats it as inside the axes and crops it
+    figure.canvas.draw()
+    below = family_legend.get_window_extent().transformed(axis.transAxes.inverted()).y0 - 0.06
+    sizes = _size_steps(table["params_m"])
+    bubbles = [Line2D([], [], marker="o", linestyle="none", markersize=np.sqrt(BUBBLE_AREA * v),
+                      markerfacecolor="lightgray", markeredgecolor="black", markeredgewidth=0.6) for v in sizes]
+    axis.legend(bubbles, [f"{v:g} M" for v in sizes], title="Parameters", loc="upper left",
+                bbox_to_anchor=(1.03, below), frameon=False, fontsize=7.5, title_fontsize=8, alignment="left",
+                borderaxespad=0, labelspacing=1.3, handletextpad=1.0)
+
+    _place_labels(axis, points)
     return save(figure, out, f"fig5_{split}_iou_vs_time")
 
 

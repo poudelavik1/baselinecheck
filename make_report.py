@@ -60,7 +60,8 @@ def formatted_summary(summary: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for _, row in summary.iterrows():
         rows.append({
-            "Model": row["label"], "Family": row["family"], "Tier": row["tier"], "Seeds": int(row["n_seeds"]),
+            "Model": row["label"], "Family": plots.family_label(row["family"]), "Tier": row["tier"],
+            "Seeds": int(row["n_seeds"]),
             "Params (M)": "-" if pd.isna(row["params_m"]) else f"{row['params_m']:.1f}",
             "FLOPs (G)": "-" if pd.isna(row["flops_g"]) else f"{row['flops_g']:.1f}",
             "Time (ms)": "-" if pd.isna(row["time_ms"]) else f"{row['time_ms']:.1f}",
@@ -120,7 +121,7 @@ def rank_and_recommend(summary: pd.DataFrame, per_tile: pd.DataFrame, tables: Pa
     tolerance_rank = summary["tol_f1_2"].rank(ascending=False, method="min").astype(int)
     tolerance_rank.index = summary["model"]
     ranking = pd.DataFrame({
-        "rank_iou": range(1, len(ranked) + 1), "model": ranked["label"], "family": ranked["family"],
+        "rank_iou": range(1, len(ranked) + 1), "model": ranked["label"], "family": ranked["family"].map(plots.family_label),
         "val IoU": [pm(m, s) for m, s in zip(ranked["iou"], ranked["iou_std"])],
         "val Tol-F1@2px": [pm(m, s) for m, s in zip(ranked["tol_f1_2"], ranked["tol_f1_2_std"])],
         "rank_tol_f1_2": [int(tolerance_rank[m]) for m in ranked["model"]],
