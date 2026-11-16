@@ -42,7 +42,7 @@ def use_offline_weights() -> None:
 
 
 class ModelEMA:
-    """Exponential moving average of weights (and BN statistics). Original-recipe runs only."""
+    """Exponential moving average of weights (and BN statistics), used for validation and best.pt."""
 
     def __init__(self, model: nn.Module, decay: float = 0.999, ramp_steps: int = 2000):
         self.module = copy.deepcopy(model).eval()

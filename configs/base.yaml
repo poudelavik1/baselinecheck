@@ -36,7 +36,8 @@ train:
   warmup_epochs: 2           # linear warm-up, then cosine to lr * min_lr_ratio
   min_lr_ratio: 0.01
   grad_clip: 1.0
-  patience: 15               # early stopping on val IoU
+  patience: 20               # early stopping on val IoU (of the EMA weights) ...
+  min_epochs: 30             # ... never before this epoch (v1 stopped pretrained models at 16-40 on noise)
   amp: true
   pretrained: true
   deterministic: true
@@ -47,8 +48,9 @@ loss:
   dice_weight: 1.0
   aux_weight: 0.0            # weight of auxiliary (deep-supervision) outputs; 0 in the benchmark
 
-recipe:                      # tricks of the original recipes; all off in the benchmark
-  ema_decay: 0.0             # > 0 enables an EMA of the weights, used for validation and best.pt
+recipe:                      # tricks of the original recipes; all off in the benchmark except the EMA
+  ema_decay: 0.999           # EMA of the weights (and BN statistics), used for validation and best.pt.
+                             # Protocol v2: in v1 (no EMA) val IoU swung by up to 0.3 between epochs.
   encoder_lr_factor: 1.0
   deep_supervision: false
   tta: false                 # horizontal/vertical flip test-time augmentation

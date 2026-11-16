@@ -202,3 +202,30 @@ python make_report.py --runs-root runs
 
 Figure 8 (qualitative grid) needs the dataset and checkpoints, so it is rendered on the
 server by `slurm/evaluate.sbatch` and arrives with the rsync.
+
+## 14. Protocol v2 (current) and the v1 results
+
+v1 (16 Nov 2026, `~/crack_benchmark_runs`) is kept for reference but not used for the
+selection: without weight averaging, val IoU of the pretrained models swung by up to 0.3
+between epochs, early stopping cut them at 16-40 epochs on that noise, and MA-Net died on
+an fp16 NaN. v2 changes, identical for every model (`configs/base.yaml`, `train.py`):
+
+- EMA of the weights (`recipe.ema_decay: 0.999`) for validation and `best.pt`;
+- early stopping: patience 20, and never before `train.min_epochs: 30`;
+- a non-finite loss skips that step; more than max(20, 2 % of the steps) in one epoch stops the run.
+
+v2 writes to its own folder, so v1 is never mixed in:
+
+```bash
+git pull
+sed -i 's|RUNS_ROOT="$HOME/crack_benchmark_runs"|RUNS_ROOT="$HOME/crack_benchmark_runs_v2"|' slurm/env.sh && grep RUNS_ROOT slurm/env.sh
+bash slurm/submit.sh --models deeplabv3p_r34 unet_convnext_t --seeds 0       # pilot: the two noisiest in v1
+```
+
+When the pilot has finished, check that val IoU no longer swings
+(`cut -d, -f1,7 $RUNS_ROOT/benchmark/deeplabv3p_r34/seed_0/history.csv`), then run the rest
+(`--missing` skips the pilot runs; `tier2` adds CrackFormer-II, the only Tier 2 model of the main env):
+
+```bash
+EVAL=1 bash slurm/submit.sh --missing --tiers core tier1 tier2
+```

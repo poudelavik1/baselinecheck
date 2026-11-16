@@ -87,7 +87,7 @@ def train_one_epoch(model, loader, loss_fn, optimizer, scaler, device, config, e
     clip = float(config["train"].get("grad_clip", 0) or 0)
     epochs = int(config["train"]["epochs"])
     threshold = float(config["eval"]["threshold"])
-    total_loss, batches = 0.0, 0
+    total_loss, batches, skipped = 0.0, 0, 0
     tp = fp = fn = 0.0
     optimizer.zero_grad(set_to_none=True)
     for step, batch in enumerate(loader):
@@ -98,7 +98,14 @@ def train_one_epoch(model, loader, loss_fn, optimizer, scaler, device, config, e
         progress = (epoch + step / max(1, len(loader))) / epochs
         loss = loss_fn(outputs, masks, progress)   # the losses cast logits to float32 themselves
         if not torch.isfinite(loss):
-            raise FloatingPointError(f"Non-finite loss at epoch {epoch + 1}, step {step}")
+            # An fp16 overflow in one batch should not kill the run (MA-Net in v1): skip the step.
+            # Many of them means the run has diverged: stop with an error.
+            skipped += 1
+            optimizer.zero_grad(set_to_none=True)
+            if skipped > max(20, len(loader) // 50):
+                raise FloatingPointError(f"Non-finite loss in {skipped} steps of epoch {epoch + 1}: the run diverged")
+            print(f"[skip] non-finite loss at epoch {epoch + 1}, step {step} ({skipped} this epoch)", flush=True)
+            continue
         scaler.scale(loss / accum_steps).backward()
         if (step + 1) % accum_steps == 0 or step + 1 == len(loader):
             if clip > 0:
@@ -231,6 +238,7 @@ def main() -> int:
           flush=True)
 
     epochs, patience = int(config["train"]["epochs"]), int(config["train"]["patience"])
+    min_epochs = int(config["train"].get("min_epochs", 0) or 0)
     stopped_early = False
     while state["epoch"] < epochs:
         epoch = state["epoch"]
@@ -276,7 +284,7 @@ def main() -> int:
         print(f"epoch {epoch + 1:3d}/{epochs} | lr {lr:.2e} | train loss {train_stats['train_loss']:.4f} "
               f"IoU {train_stats['train_iou']:.4f} | val loss {val_stats['val_loss']:.4f} IoU {val_stats['val_iou']:.4f} "
               f"F1 {val_stats['val_f1']:.4f}{' *' if improved else ''} | {seconds:.0f}s{memory}", flush=True)
-        if state["bad_epochs"] >= patience:
+        if state["bad_epochs"] >= patience and state["epoch"] >= min_epochs:
             stopped_early = True
             print(f"[early stop] no val IoU improvement for {patience} epochs")
             break
